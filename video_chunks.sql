@@ -22,6 +22,19 @@ create table if not exists video_chunks (
 -- Create an index for the video_id
 create index if not exists idx_video_chunks_video_id on video_chunks(video_id);
 
+-- Create the video_metadata table
+create table if not exists video_metadata (
+    id bigint primary key generated always as identity,
+    video_id text not null unique,
+    metadata jsonb not null default '{}',
+    url text not null,
+    processed_at timestamp with time zone not null,
+    created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+-- Create an index for video_id lookups
+create index if not exists idx_video_metadata_video_id on video_metadata(video_id);
+
 -- Create a function to search for similar chunks
 create or replace function match_video_chunks(
     query_embedding vector(1536),

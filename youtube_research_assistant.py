@@ -26,21 +26,32 @@ class YouTubeAssistantDeps:
 
 system_prompt = """
 You are an expert research assistant that helps users understand YouTube video content. You have access to transcripts
-from various YouTube videos and can provide detailed answers based on the video content.
+and metadata from various YouTube videos and can provide detailed answers based on the video content.
 
-Your job is to assist users by providing accurate information from the video transcripts, including specific timestamps
-when relevant. Always make sure to search through the available transcripts before answering questions.
+Your job is to assist users by providing accurate information from the video transcripts and metadata, including specific 
+timestamps when relevant. Always make sure to search through the available content before answering questions.
 
 When answering:
 1. Cite specific parts of the video with timestamps when possible
 2. Be clear about which video you're referencing
 3. If multiple videos contain relevant information, synthesize the information from all sources
-4. Be honest when you can't find relevant information in the available transcripts
+4. Include relevant metadata (views, channel, publish date) when it adds context
+5. Be honest when you can't find relevant information in the available transcripts
 
-To answer questions effectively:
-1. First use search_video_content to find relevant parts of the videos
-2. If needed, use list_available_videos to see what videos are available
-3. For deeper context, use get_full_transcript to get the complete transcript of a specific video
+Available tools:
+1. search_video_content: Find relevant parts of videos based on your query
+2. list_available_videos: See what videos are available in the knowledge base
+3. get_full_transcript: Get the complete transcript of a specific video
+4. get_video_info: Get detailed metadata about a video (title, channel, views, etc.)
+5. summarize_video: Generate a comprehensive summary of a video's content
+6. compare_videos: Compare multiple videos to analyze similarities and differences
+
+For complex queries:
+1. First check available videos using list_available_videos
+2. Use search_video_content to find relevant segments
+3. Get more context with get_video_info and get_full_transcript if needed
+4. Use summarize_video for high-level understanding
+5. Use compare_videos when analyzing multiple related videos
 
 Remember to maintain the context of video content and provide timestamps so users can verify the information directly
 in the videos.
@@ -163,6 +174,181 @@ Timestamp: {timestamp}
     
     return "\n".join(chunks)
 
+@youtube_assistant.tool()
+async def get_video_info(
+    ctx: RunContext[YouTubeAssistantDeps],
+    video_id: str
+) -> str:
+    """
+    Get detailed information about a specific video.
+    
+    Args:
+        ctx: The context including the Supabase client
+        video_id: The ID of the video to get information for
+        
+    Returns:
+        A formatted string containing the video's metadata
+    """
+    response = ctx.deps.supabase.table("video_metadata") \
+        .select("*") \
+        .eq("video_id", video_id) \
+        .single() \
+        .execute()
+    
+    if not response.data:
+        return f"No metadata found for video ID: {video_id}"
+    
+    metadata = response.data["metadata"]
+    formatted_info = f"""
+Video Title: {metadata['title']}
+Channel: {metadata['channel']}
+Views: {metadata['views']:,}
+Duration: {metadata['length'] // 60}:{metadata['length'] % 60:02d}
+Published: {metadata['publish_date']}
+
+Description:
+{metadata['description']}
+"""
+    return formatted_info
+
+@youtube_assistant.tool()
+async def summarize_video(
+    ctx: RunContext[YouTubeAssistantDeps],
+    video_id: str
+) -> str:
+    """
+    Generate a comprehensive summary of the video using its transcript.
+    
+    Args:
+        ctx: The context including the Supabase client and OpenAI client
+        video_id: The ID of the video to summarize
+        
+    Returns:
+        A detailed summary of the video's content
+    """
+    # Get video metadata
+    metadata_response = ctx.deps.supabase.table("video_metadata") \
+        .select("*") \
+        .eq("video_id", video_id) \
+        .single() \
+        .execute()
+    
+    if not metadata_response.data:
+        return f"No metadata found for video ID: {video_id}"
+    
+    # Get full transcript
+    transcript_response = ctx.deps.supabase.table("video_chunks") \
+        .select("*") \
+        .eq("video_id", video_id) \
+        .order("chunk_number") \
+        .execute()
+    
+    if not transcript_response.data:
+        return f"No transcript found for video ID: {video_id}"
+    
+    # Combine all chunks
+    full_transcript = " ".join(chunk["content"] for chunk in transcript_response.data)
+    metadata = metadata_response.data["metadata"]
+    
+    # Create a prompt for GPT-4 to summarize
+    prompt = f"""Please provide a comprehensive summary of this video content.
+
+Video Title: {metadata['title']}
+Channel: {metadata['channel']}
+Duration: {metadata['length'] // 60}:{metadata['length'] % 60:02d}
+
+Transcript:
+{full_transcript}
+
+Please structure the summary with:
+1. Main topics/themes
+2. Key points discussed
+3. Important conclusions or takeaways
+4. Notable quotes or statements (with timestamps if available)
+"""
+    
+    response = await ctx.deps.openai_client.chat.completions.create(
+        model="gpt-4",
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.7
+    )
+    
+    return response.choices[0].message.content
+
+@youtube_assistant.tool()
+async def compare_videos(
+    ctx: RunContext[YouTubeAssistantDeps],
+    video_ids: List[str]
+) -> str:
+    """
+    Compare multiple videos and analyze their similarities and differences.
+    
+    Args:
+        ctx: The context including the Supabase client and OpenAI client
+        video_ids: List of video IDs to compare
+        
+    Returns:
+        A comparison analysis of the videos
+    """
+    if len(video_ids) < 2:
+        return "Please provide at least 2 video IDs to compare."
+    
+    videos_data = []
+    for video_id in video_ids:
+        # Get metadata
+        metadata = ctx.deps.supabase.table("video_metadata") \
+            .select("*") \
+            .eq("video_id", video_id) \
+            .single() \
+            .execute()
+        
+        if not metadata.data:
+            return f"No metadata found for video ID: {video_id}"
+        
+        # Get transcript summary
+        chunks = ctx.deps.supabase.table("video_chunks") \
+            .select("content") \
+            .eq("video_id", video_id) \
+            .execute()
+        
+        if not chunks.data:
+            return f"No transcript found for video ID: {video_id}"
+        
+        full_transcript = " ".join(chunk["content"] for chunk in chunks.data)
+        
+        videos_data.append({
+            "metadata": metadata.data["metadata"],
+            "transcript": full_transcript
+        })
+    
+    # Create a prompt for comparison
+    comparison_prompt = "Please compare and analyze these videos:\n\n"
+    for i, data in enumerate(videos_data, 1):
+        comparison_prompt += f"""
+Video {i}:
+Title: {data['metadata']['title']}
+Channel: {data['metadata']['channel']}
+Transcript: {data['transcript'][:2000]}...
+
+"""
+    
+    comparison_prompt += """
+Please provide a detailed comparison including:
+1. Common themes and topics
+2. Key differences in perspective or approach
+3. Unique insights from each video
+4. Which video might be more helpful for different purposes
+5. How the videos complement each other
+"""
+    
+    response = await ctx.deps.openai_client.chat.completions.create(
+        model="gpt-4",
+        messages=[{"role": "user", "content": comparison_prompt}],
+        temperature=0.7
+    )
+    
+    return response.choices[0].message.content
+
 async def get_embedding(text: str, openai_client: AsyncOpenAI) -> List[float]:
     """Get embedding vector from OpenAI."""
     try:
@@ -174,4 +360,3 @@ async def get_embedding(text: str, openai_client: AsyncOpenAI) -> List[float]:
     except Exception as e:
         print(f"Error getting embedding: {str(e)}")
         raise
-
