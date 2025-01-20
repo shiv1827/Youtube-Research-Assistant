@@ -1,113 +1,110 @@
 import streamlit as st
 from typing import Dict, Any, List
 import json
+import re
+
+def clean_text(text: str) -> str:
+    """Clean text by removing HTML tags and extra whitespace."""
+    # Remove HTML tags and common artifacts
+    text = re.sub(r'<[^>]+>|</[^>]+>', '', text)
+    # Fix common HTML entities
+    text = text.replace('&nbsp;', ' ').replace('&amp;', '&')
+    # Remove extra whitespace
+    text = ' '.join(text.split())
+    return text
+
+def create_youtube_embed(video_id: str, timestamp: int = 0):
+    """Create YouTube embed HTML with JavaScript for timestamp control."""
+    return f'''
+    <div style="position: relative; width: 100%; padding-bottom: 56.25%;">
+        <iframe
+            src="https://www.youtube.com/embed/{video_id}?enablejsapi=1&start={timestamp}"
+            style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;"
+            frameborder="0"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowfullscreen
+        ></iframe>
+    </div>
+    '''
 
 def render_video_section(video_id: str, metadata: Dict[str, Any], chunks: List[Dict[str, Any]]):
     """Render the video section with metadata and insights."""
-    # Video metadata section
-    col1, col2 = st.columns([2, 1])
+    # Title and metadata
+    st.title(metadata.get("title", "Unknown Title"))
+    st.write(f"By {metadata.get('channel', 'Unknown Channel')} • {metadata.get('publish_date', '')}")
     
+    # Stats row
+    col1, col2 = st.columns(2)
     with col1:
-        st.title(metadata.get("title", "Unknown Title"))
-        st.write(f"By {metadata.get('channel', 'Unknown Channel')} • {metadata.get('publish_date', '')}")
-    
-    with col2:
         st.write(f"👁️ {metadata.get('views', 0):,} views")
+    with col2:
         if metadata.get('rating'):
             st.write(f"👍 {metadata.get('rating', 0):,} likes")
+
+    # Video player with timestamp support
+    if 'timestamp' not in st.session_state:
+        st.session_state.timestamp = 0
+        
+    st.components.v1.html(
+        create_youtube_embed(video_id, st.session_state.timestamp),
+        height=450
+    )
     
-    # Navigation tabs
+    # Content tabs
     tab_summary, tab_stories, tab_insights = st.tabs(["Summary", "Stories", "Key Insights"])
     
     with tab_summary:
-        st.markdown("""
-        <style>
-        .timestamp-link {
-            text-decoration: none;
-            color: #1E88E5;
-            background-color: #E3F2FD;
-            padding: 2px 6px;
-            border-radius: 4px;
-            font-size: 0.8em;
-            margin-right: 8px;
-        }
-        </style>
-        """, unsafe_allow_html=True)
-        
         for chunk in chunks:
-            timestamp = chunk["start_time"]
-            minutes = int(timestamp // 60)
-            seconds = int(timestamp % 60)
-            timestamp_str = f"{minutes:02d}:{seconds:02d}"
+            timestamp = int(chunk["start_time"])
+            col1, col2 = st.columns([1, 11])
             
-            st.markdown(f"""
-            <div style='margin-bottom: 20px;'>
-                <a href='https://youtube.com/watch?v={video_id}&t={int(timestamp)}' 
-                   class='timestamp-link' target='_blank'>
-                    {timestamp_str}
-                </a>
-                {chunk["summary"]}
-            </div>
-            """, unsafe_allow_html=True)
+            with col1:
+                if st.button(f"{timestamp//60:02d}:{timestamp%60:02d}", key=f"sum_{timestamp}"):
+                    st.session_state.timestamp = timestamp
+                    st.rerun()
+            
+            with col2:
+                st.write(clean_text(chunk["summary"]))
+            st.divider()
     
     with tab_stories:
-        stories = []
+        has_stories = False
         for chunk in chunks:
-            # Extract stories from chunk content using title and summary
             if "story" in chunk["title"].lower() or "example" in chunk["title"].lower():
-                stories.append({
-                    "timestamp": chunk["start_time"],
-                    "title": chunk["title"],
-                    "content": chunk["summary"]
-                })
-        
-        if stories:
-            for story in stories:
-                timestamp = story["timestamp"]
-                minutes = int(timestamp // 60)
-                seconds = int(timestamp % 60)
-                timestamp_str = f"{minutes:02d}:{seconds:02d}"
+                has_stories = True
+                timestamp = int(chunk["start_time"])
+                col1, col2 = st.columns([1, 11])
                 
-                st.markdown(f"""
-                <div style='margin-bottom: 20px;'>
-                    <a href='https://youtube.com/watch?v={video_id}&t={int(timestamp)}' 
-                       class='timestamp-link' target='_blank'>
-                        {timestamp_str}
-                    </a>
-                    <strong>{story["title"]}</strong><br/>
-                    {story["content"]}
-                </div>
-                """, unsafe_allow_html=True)
-        else:
+                with col1:
+                    if st.button(f"{timestamp//60:02d}:{timestamp%60:02d}", key=f"story_{timestamp}"):
+                        st.session_state.timestamp = timestamp
+                        st.rerun()
+                
+                with col2:
+                    st.markdown(f"**{clean_text(chunk['title'])}**")
+                    st.write(clean_text(chunk["summary"]))
+                st.divider()
+        
+        if not has_stories:
             st.info("No stories found in this video.")
     
     with tab_insights:
-        insights = []
+        has_insights = False
         for chunk in chunks:
-            # Look for key points or insights in the content
             if any(keyword in chunk["title"].lower() for keyword in ["key", "insight", "point", "lesson", "takeaway"]):
-                insights.append({
-                    "timestamp": chunk["start_time"],
-                    "title": chunk["title"],
-                    "content": chunk["summary"]
-                })
-        
-        if insights:
-            for insight in insights:
-                timestamp = insight["timestamp"]
-                minutes = int(timestamp // 60)
-                seconds = int(timestamp % 60)
-                timestamp_str = f"{minutes:02d}:{seconds:02d}"
+                has_insights = True
+                timestamp = int(chunk["start_time"])
+                col1, col2 = st.columns([1, 11])
                 
-                st.markdown(f"""
-                <div style='margin-bottom: 20px;'>
-                    <a href='https://youtube.com/watch?v={video_id}&t={int(timestamp)}' 
-                       class='timestamp-link' target='_blank'>
-                        {timestamp_str}
-                    </a>
-                    <strong>{insight["title"]}</strong><br/>
-                    {insight["content"]}
-                </div>
-                """, unsafe_allow_html=True)
-        else:
+                with col1:
+                    if st.button(f"{timestamp//60:02d}:{timestamp%60:02d}", key=f"insight_{timestamp}"):
+                        st.session_state.timestamp = timestamp
+                        st.rerun()
+                
+                with col2:
+                    st.markdown(f"**{clean_text(chunk['title'])}**")
+                    st.write(clean_text(chunk["summary"]))
+                st.divider()
+        
+        if not has_insights:
             st.info("No key insights found in this video.")
