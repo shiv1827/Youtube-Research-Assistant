@@ -26,6 +26,7 @@ from youtube_research_assistant import youtube_assistant, YouTubeAssistantDeps
 
 # Import topic graph components
 from components.topic_graph import render_topic_graph, format_graph_data, topic_graph_sidebar
+from components.video_insights import render_video_section
 
 # Load environment variables
 from dotenv import load_dotenv
@@ -110,8 +111,8 @@ async def run_agent_with_streaming(user_input: str):
 async def main():
     st.title("YouTube Video Research Assistant")
     
-    # Create tabs for chat and graph
-    tab1, tab2 = st.tabs(["Chat Interface", "Topic Graph"])
+    # Create tabs for chat, graph, and insights
+    tab1, tab2, tab3 = st.tabs(["Chat Interface", "Topic Graph", "Video Insights"])
     
     with tab1:
         st.write("Ask questions about the YouTube videos in the knowledge base!")
@@ -148,30 +149,73 @@ async def main():
         # Fetch available videos
         result = supabase.table("topic_graphs").select("*").execute()
         if result.data:
-            # Let user select a video
-            video_ids = [item["video_id"] for item in result.data]
-            selected_video = st.selectbox("Select a video to view its topic graph", video_ids)
+            # Create columns with better ratio for graph visibility
+            col1, col2 = st.columns([8, 2])
             
-            if selected_video:
-                # Get the topic graph data for selected video
-                graph_data = next((item for item in result.data if item["video_id"] == selected_video), None)
-                if graph_data:
-                    # Create columns for graph and sidebar
-                    col1, col2 = st.columns([7, 3])
-                    with col1:
-                        # Format and render the graph
-                        formatted_data = format_graph_data({
+            with col2:
+                # Move video selection to sidebar
+                selected_video = st.selectbox(
+                    "Select a video", 
+                    [item["video_id"] for item in result.data],
+                    key="topic_graph_select"
+                )
+                
+                if selected_video:
+                    # Get the topic graph data for selected video
+                    graph_data = next((item for item in result.data if item["video_id"] == selected_video), None)
+                    if graph_data:
+                        # Render the sidebar controls
+                        topic_graph_sidebar(format_graph_data({
                             "nodes": graph_data["nodes"],
                             "edges": graph_data["edges"]
-                        })
-                        render_topic_graph(formatted_data, height=600)
-                    
-                    with col2:
-                        # Render the sidebar controls
-                        topic_graph_sidebar(formatted_data)
+                        }))
+            
+            with col1:
+                if selected_video and graph_data:
+                    # Format and render the graph with increased height
+                    formatted_data = format_graph_data({
+                        "nodes": graph_data["nodes"],
+                        "edges": graph_data["edges"]
+                    })
+                    # Use the full container width and increased height
+                    render_topic_graph(formatted_data, height=800)
         else:
             st.info("No topic graphs available yet. Process some videos first!")
-
+    
+    with tab3:
+        # Fetch available videos with their metadata
+        videos = supabase.table("video_metadata").select("*").execute()
+        if videos.data:
+            # Let user select a video
+            video_options = {f"{v['metadata']['title']} ({v['video_id']})": v['video_id'] 
+                           for v in videos.data if v['metadata'].get('title')}
+            selected_video_id = st.selectbox(
+                "Select a video to view insights", 
+                options=list(video_options.keys()),
+                key="video_insights_select"
+            )
+            
+            if selected_video_id:
+                video_id = video_options[selected_video_id]
+                # Get video metadata
+                video_data = next((v for v in videos.data if v['video_id'] == video_id), None)
+                
+                if video_data:
+                    # Get video chunks
+                    chunks = supabase.table("video_chunks") \
+                        .select("*") \
+                        .eq("video_id", video_id) \
+                        .order("chunk_number") \
+                        .execute()
+                    
+                    # Render video insights section
+                    render_video_section(
+                        video_id=video_id,
+                        metadata=video_data['metadata'],
+                        chunks=chunks.data
+                    )
+        else:
+            st.info("No videos available yet. Process some videos first!")
 
 if __name__ == "__main__":
     asyncio.run(main())

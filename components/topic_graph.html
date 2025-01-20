@@ -93,13 +93,13 @@
         const simulation = d3.forceSimulation(graphData.nodes)
             .force("link", d3.forceLink(graphData.edges)
                 .id(d => d.id)
-                .distance(100))
+                .distance(150)) // Increased distance between nodes
             .force("charge", d3.forceManyBody()
-                .strength(d => -100 * Math.sqrt(d.size)))
+                .strength(d => -200 * Math.sqrt(d.size))) // Increased repulsion
             .force("center", d3.forceCenter(width / 2, height / 2))
-            .force("collision", d3.forceCollide().radius(d => d.size + 20))
-            .force("x", d3.forceX(width / 2).strength(0.1))
-            .force("y", d3.forceY(height / 2).strength(0.1));
+            .force("collision", d3.forceCollide().radius(d => d.size + 30)) // Increased collision radius
+            .force("x", d3.forceX(width / 2).strength(0.05)) // Reduced x-force
+            .force("y", d3.forceY(height / 2).strength(0.05)); // Reduced y-force
         
         // Create SVG container
         const svg = d3.select("#graph")
@@ -162,8 +162,8 @@
         sections.append("rect")
             .attr("class", "section-background")
             .attr("fill", d => sectionColors[d[0]])
-            .attr("width", 300)
-            .attr("height", 200);
+            .attr("width", 400) // Increased section width
+            .attr("height", 300); // Increased section height
         
         sections.append("text")
             .attr("class", "section-label")
@@ -255,8 +255,8 @@
             // Update section backgrounds
             sections.attr("transform", d => {
                 const nodes = d[1];
-                const x = d3.mean(nodes, n => n.x) - 150;
-                const y = d3.mean(nodes, n => n.y) - 100;
+                const x = d3.mean(nodes, n => n.x) - 200; // Adjusted for new width
+                const y = d3.mean(nodes, n => n.y) - 150; // Adjusted for new height
                 return `translate(${x},${y})`;
             });
         });
