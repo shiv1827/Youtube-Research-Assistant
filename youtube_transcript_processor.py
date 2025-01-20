@@ -253,7 +253,8 @@ async def process_video(video_url: str):
                 print(f"Processed and stored chunk {i} for video {video_id}")
             except Exception as e:
                 print(f"Error processing chunk {i} for video {video_id}: {str(e)}")
-                
+        return video_id
+
     except Exception as e:
         print(f"Error processing video {video_id}: {str(e)}")
 

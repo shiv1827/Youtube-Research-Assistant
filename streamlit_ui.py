@@ -24,6 +24,9 @@ from pydantic_ai.messages import (
 )
 from youtube_research_assistant import youtube_assistant, YouTubeAssistantDeps
 
+# Import topic graph components
+from components.topic_graph import render_topic_graph, format_graph_data, topic_graph_sidebar
+
 # Load environment variables
 from dotenv import load_dotenv
 load_dotenv()
@@ -106,37 +109,68 @@ async def run_agent_with_streaming(user_input: str):
 
 async def main():
     st.title("YouTube Video Research Assistant")
-    st.write("Ask questions about the YouTube videos in the knowledge base!")
+    
+    # Create tabs for chat and graph
+    tab1, tab2 = st.tabs(["Chat Interface", "Topic Graph"])
+    
+    with tab1:
+        st.write("Ask questions about the YouTube videos in the knowledge base!")
 
-    # Initialize chat history in session state if not present
-    if "messages" not in st.session_state:
-        st.session_state.messages = []
+        # Initialize chat history in session state if not present
+        if "messages" not in st.session_state:
+            st.session_state.messages = []
 
-    # Display all messages from the conversation so far
-    # Each message is either a ModelRequest or ModelResponse.
-    # We iterate over their parts to decide how to display them.
-    for msg in st.session_state.messages:
-        if isinstance(msg, ModelRequest) or isinstance(msg, ModelResponse):
-            for part in msg.parts:
-                display_message_part(part)
+        # Display all messages from the conversation so far
+        for msg in st.session_state.messages:
+            if isinstance(msg, ModelRequest) or isinstance(msg, ModelResponse):
+                for part in msg.parts:
+                    display_message_part(part)
 
-    # Chat input for the user
-    user_input = st.chat_input("What would you like to know about the videos?")
+        # Chat input for the user
+        user_input = st.chat_input("What would you like to know about the videos?")
 
-    if user_input:
-        # We append a new request to the conversation explicitly
-        st.session_state.messages.append(
-            ModelRequest(parts=[UserPromptPart(content=user_input)])
-        )
-        
-        # Display user prompt in the UI
-        with st.chat_message("user"):
-            st.markdown(user_input)
+        if user_input:
+            # We append a new request to the conversation explicitly
+            st.session_state.messages.append(
+                ModelRequest(parts=[UserPromptPart(content=user_input)])
+            )
+            
+            # Display user prompt in the UI
+            with st.chat_message("user"):
+                st.markdown(user_input)
 
-        # Display the assistant's partial response while streaming
-        with st.chat_message("assistant"):
-            # Actually run the agent now, streaming the text
-            await run_agent_with_streaming(user_input)
+            # Display the assistant's partial response while streaming
+            with st.chat_message("assistant"):
+                # Actually run the agent now, streaming the text
+                await run_agent_with_streaming(user_input)
+    
+    with tab2:
+        # Fetch available videos
+        result = supabase.table("topic_graphs").select("*").execute()
+        if result.data:
+            # Let user select a video
+            video_ids = [item["video_id"] for item in result.data]
+            selected_video = st.selectbox("Select a video to view its topic graph", video_ids)
+            
+            if selected_video:
+                # Get the topic graph data for selected video
+                graph_data = next((item for item in result.data if item["video_id"] == selected_video), None)
+                if graph_data:
+                    # Create columns for graph and sidebar
+                    col1, col2 = st.columns([7, 3])
+                    with col1:
+                        # Format and render the graph
+                        formatted_data = format_graph_data({
+                            "nodes": graph_data["nodes"],
+                            "edges": graph_data["edges"]
+                        })
+                        render_topic_graph(formatted_data, height=600)
+                    
+                    with col2:
+                        # Render the sidebar controls
+                        topic_graph_sidebar(formatted_data)
+        else:
+            st.info("No topic graphs available yet. Process some videos first!")
 
 
 if __name__ == "__main__":

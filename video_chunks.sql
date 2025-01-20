@@ -35,6 +35,35 @@ create table if not exists video_metadata (
 -- Create an index for video_id lookups
 create index if not exists idx_video_metadata_video_id on video_metadata(video_id);
 
+-- Create the topic_graphs table
+create table if not exists topic_graphs (
+    id bigint primary key generated always as identity,
+    video_id text not null unique references video_metadata(video_id),
+    nodes jsonb not null default '[]',
+    edges jsonb not null default '[]',
+    metadata jsonb not null default '{}',
+    created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+    updated_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+-- Create an index for video_id lookups
+create index if not exists idx_topic_graphs_video_id on topic_graphs(video_id);
+
+-- Create a function to update the updated_at timestamp
+create or replace function update_updated_at_column()
+returns trigger as $$
+begin
+    new.updated_at = timezone('utc'::text, now());
+    return new;
+end;
+$$ language plpgsql;
+
+-- Create a trigger to automatically update updated_at
+create trigger update_topic_graphs_updated_at
+    before update on topic_graphs
+    for each row
+    execute function update_updated_at_column();
+
 -- Create a function to search for similar chunks
 create or replace function match_video_chunks(
     query_embedding vector(1536),

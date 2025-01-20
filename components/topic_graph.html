@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        #graph {
+            width: 100%;
+            height: 100%;
+            background-color: #ffffff;
+        }
+        
+        .node {
+            cursor: pointer;
+            stroke: #fff;
+            stroke-width: 2px;
+            transition: all 0.3s ease;
+        }
+        
+        .node:hover {
+            stroke: #000;
+            stroke-width: 3px;
+            filter: brightness(1.1);
+        }
+        
+        .node-label {
+            font-family: Arial, sans-serif;
+            font-size: 12px;
+            font-weight: 500;
+            pointer-events: none;
+            text-shadow: 
+                -1px -1px 0 #fff,
+                1px -1px 0 #fff,
+                -1px 1px 0 #fff,
+                1px 1px 0 #fff;
+        }
+        
+        .link {
+            fill: none;
+            stroke: #999;
+            stroke-opacity: 0.6;
+            marker-end: url(#arrowhead);
+        }
+        
+        .section-background {
+            fill-opacity: 0.1;
+            rx: 15;
+            ry: 15;
+        }
+        
+        .tooltip {
+            position: absolute;
+            padding: 12px;
+            background-color: rgba(255, 255, 255, 0.95);
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            pointer-events: none;
+            font-family: Arial, sans-serif;
+            font-size: 12px;
+            max-width: 300px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .section-label {
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+            font-weight: bold;
+            fill: #666;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="graph"></div>
+    <script>
+        // Graph data will be injected here
+        var graphData = {};
+        
+        // Set up the simulation
+        const width = window.innerWidth;
+        const height = window.innerHeight;
+        
+        // Group nodes by category for sections
+        const groupedNodes = {};
+        if (graphData.nodes) {
+            graphData.nodes.forEach(node => {
+                if (!groupedNodes[node.category]) {
+                    groupedNodes[node.category] = [];
+                }
+                groupedNodes[node.category].push(node);
+            });
+        }
+        
+        const simulation = d3.forceSimulation(graphData.nodes)
+            .force("link", d3.forceLink(graphData.edges)
+                .id(d => d.id)
+                .distance(100))
+            .force("charge", d3.forceManyBody()
+                .strength(d => -100 * Math.sqrt(d.size)))
+            .force("center", d3.forceCenter(width / 2, height / 2))
+            .force("collision", d3.forceCollide().radius(d => d.size + 20))
+            .force("x", d3.forceX(width / 2).strength(0.1))
+            .force("y", d3.forceY(height / 2).strength(0.1));
+        
+        // Create SVG container
+        const svg = d3.select("#graph")
+            .append("svg")
+            .attr("viewBox", [0, 0, width, height]);
+        
+        // Define arrow marker
+        svg.append("defs").append("marker")
+            .attr("id", "arrowhead")
+            .attr("viewBox", "0 -5 10 10")
+            .attr("refX", 20)
+            .attr("refY", 0)
+            .attr("markerWidth", 6)
+            .attr("markerHeight", 6)
+            .attr("orient", "auto")
+            .append("path")
+            .attr("d", "M0,-5L10,0L0,5")
+            .attr("fill", "#999");
+        
+        // Create zoom behavior
+        const zoom = d3.zoom()
+            .scaleExtent([0.1, 4])
+            .on("zoom", zoomed);
+        
+        svg.call(zoom);
+        
+        // Create container for zoomable content
+        const container = svg.append("g");
+        
+        // Create tooltip
+        const tooltip = d3.select("body")
+            .append("div")
+            .attr("class", "tooltip")
+            .style("opacity", 0);
+        
+        // Create section backgrounds
+        const sectionColors = {
+            "Technical": "#4e79a7",
+            "Ethical": "#f28e2c",
+            "Business": "#e15759",
+            "Personal Story": "#76b7b2",
+            "Other": "#59a14f"
+        };
+        
+        // Draw edges with curves
+        const link = container.append("g")
+            .selectAll("path")
+            .data(graphData.edges)
+            .join("path")
+            .attr("class", "link")
+            .attr("stroke-width", d => Math.sqrt(d.weight) * 2);
+        
+        // Draw section backgrounds
+        const sections = container.append("g")
+            .selectAll("g")
+            .data(Object.entries(groupedNodes))
+            .join("g")
+            .attr("class", "section");
+        
+        sections.append("rect")
+            .attr("class", "section-background")
+            .attr("fill", d => sectionColors[d[0]])
+            .attr("width", 300)
+            .attr("height", 200);
+        
+        sections.append("text")
+            .attr("class", "section-label")
+            .attr("dy", -10)
+            .text(d => d[0]);
+        
+        // Draw nodes
+        const node = container.append("g")
+            .selectAll("circle")
+            .data(graphData.nodes)
+            .join("circle")
+            .attr("class", "node")
+            .attr("r", d => d.size)
+            .attr("fill", d => d.color)
+            .call(drag(simulation));
+        
+        // Add labels with better placement
+        const label = container.append("g")
+            .selectAll("text")
+            .data(graphData.nodes)
+            .join("text")
+            .attr("class", "node-label")
+            .attr("dy", d => -d.size - 5)
+            .text(d => d.label);
+        
+        // Node interactions
+        node.on("mouseover", function(event, d) {
+            tooltip.transition()
+                .duration(200)
+                .style("opacity", .9);
+            
+            tooltip.html(`
+                <strong>${d.label}</strong><br/>
+                <em>${d.category}</em><br/>
+                <hr style="margin: 5px 0"/>
+                ${d.summary}<br/>
+                <strong>Key Insights:</strong><br/>
+                ${d.key_insights.map(insight => `• ${insight}`).join('<br/>')}
+            `)
+                .style("left", (event.pageX + 10) + "px")
+                .style("top", (event.pageY - 10) + "px");
+            
+            // Highlight connected nodes and links
+            const connectedNodeIds = new Set();
+            link.each(l => {
+                if (l.source === d || l.target === d) {
+                    connectedNodeIds.add(l.source.id).add(l.target.id);
+                }
+            });
+            
+            node.style("opacity", n => connectedNodeIds.has(n.id) ? 1 : 0.3);
+            link.style("opacity", l => (l.source === d || l.target === d) ? 1 : 0.1);
+            label.style("opacity", n => connectedNodeIds.has(n.id) ? 1 : 0.3);
+        })
+        .on("mouseout", function(d) {
+            tooltip.transition()
+                .duration(500)
+                .style("opacity", 0);
+            
+            // Reset highlights
+            node.style("opacity", 1);
+            link.style("opacity", 0.6);
+            label.style("opacity", 1);
+        })
+        .on("click", function(event, d) {
+            window.parent.postMessage({
+                type: "node_clicked",
+                node: d
+            }, "*");
+        });
+        
+        // Update simulation with curved edges
+        simulation.on("tick", () => {
+            link.attr("d", d => {
+                const dx = d.target.x - d.source.x,
+                      dy = d.target.y - d.source.y,
+                      dr = Math.sqrt(dx * dx + dy * dy);
+                return `M${d.source.x},${d.source.y}A${dr},${dr} 0 0,1 ${d.target.x},${d.target.y}`;
+            });
+            
+            node
+                .attr("cx", d => d.x = Math.max(d.size, Math.min(width - d.size, d.x)))
+                .attr("cy", d => d.y = Math.max(d.size, Math.min(height - d.size, d.y)));
+            
+            label
+                .attr("x", d => d.x)
+                .attr("y", d => d.y);
+            
+            // Update section backgrounds
+            sections.attr("transform", d => {
+                const nodes = d[1];
+                const x = d3.mean(nodes, n => n.x) - 150;
+                const y = d3.mean(nodes, n => n.y) - 100;
+                return `translate(${x},${y})`;
+            });
+        });
+        
+        // Zoom function
+        function zoomed(event) {
+            container.attr("transform", event.transform);
+        }
+        
+        // Drag functions
+        function drag(simulation) {
+            function dragstarted(event) {
+                if (!event.active) simulation.alphaTarget(0.3).restart();
+                event.subject.fx = event.subject.x;
+                event.subject.fy = event.subject.y;
+            }
+            
+            function dragged(event) {
+                event.subject.fx = event.x;
+                event.subject.fy = event.y;
+            }
+            
+            function dragended(event) {
+                if (!event.active) simulation.alphaTarget(0);
+                event.subject.fx = null;
+                event.subject.fy = null;
+            }
+            
+            return d3.drag()
+                .on("start", dragstarted)
+                .on("drag", dragged)
+                .on("end", dragended);
+        }
+        
+        // Handle window resizing
+        window.addEventListener("resize", () => {
+            const width = window.innerWidth;
+            const height = window.innerHeight;
+            svg.attr("viewBox", [0, 0, width, height]);
+            simulation.force("center", d3.forceCenter(width / 2, height / 2));
+            simulation.alpha(0.3).restart();
+        });
+        
+        // Handle messages from Streamlit
+        window.addEventListener("message", (event) => {
+            if (event.data.type === "update_filters") {
+                const filters = event.data.filters;
+                
+                // Update node visibility
+                node.style("display", d => 
+                    filters.categories.includes(d.category) ? "block" : "none"
+                );
+                
+                // Update label visibility
+                label.style("display", d =>
+                    filters.categories.includes(d.category) ? "block" : "none"
+                );
+                
+                // Update link visibility
+                link.style("display", d =>
+                    filters.categories.includes(d.source.category) &&
+                    filters.categories.includes(d.target.category) ? "block" : "none"
+                );
+                
+                // Update section visibility
+                sections.style("display", d =>
+                    filters.categories.includes(d[0]) ? "block" : "none"
+                );
+                
+                // Restart simulation
+                simulation.alpha(0.3).restart();
+            }
+        });
+    </script>
+</body>
+</html>
