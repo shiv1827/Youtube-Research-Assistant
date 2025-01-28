@@ -13,6 +13,10 @@ load_dotenv()
 
 # Initialize clients
 openai_client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+deepseek_client = AsyncOpenAI(
+    api_key=os.getenv("DEEPSEEK_API_KEY"),
+    base_url="https://api.deepseek.com/v1"
+)
 supabase: Client = create_client(
     os.getenv("SUPABASE_URL"),
     os.getenv("SUPABASE_SERVICE_KEY")
@@ -42,7 +46,7 @@ class TopicGraph:
     edges: List[TopicEdge]
 
 async def extract_topics_from_chunk(chunk_text: str, chunk_id: int) -> List[Dict[str, Any]]:
-    """Extract topics and their details from a transcript chunk using GPT-4."""
+    """Extract topics and their details from a transcript chunk using Deepseek."""
     prompt = """Analyze this transcript chunk and identify key topics/concepts.
     For each topic provide:
     1. A concise label (2-4 words)
@@ -73,21 +77,39 @@ async def extract_topics_from_chunk(chunk_text: str, chunk_id: int) -> List[Dict
     Respond ONLY with the JSON, no other text.
     """
 
-    response = await openai_client.chat.completions.create(
-        model="gpt-4",
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0.7
-    )
-    
     try:
-        return json.loads(response.choices[0].message.content)
-    except json.JSONDecodeError as e:
-        print(f"Error parsing JSON from GPT response: {e}")
-        print(f"Raw response: {response.choices[0].message.content}")
+        response = await deepseek_client.chat.completions.create(
+            model="deepseek-chat",
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant that responds only in valid JSON format."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.3  # Lower temperature for more consistent JSON output
+        )
+        
+        content = response.choices[0].message.content.strip()
+        # Clean up the response to ensure it's valid JSON
+        content = content.replace("```json", "").replace("```", "").strip()
+        
+        # Print raw content for debugging
+        print("Raw response content:", content)
+        
+        try:
+            return json.loads(content)
+        except json.JSONDecodeError as e:
+            print(f"JSON parse error: {e}")
+            # Attempt to fix common JSON issues
+            if not content.startswith("{"):
+                content = content[content.find("{"):]
+            if not content.endswith("}"):
+                content = content[:content.rfind("}") + 1]
+            return json.loads(content)
+    except Exception as e:
+        print(f"Error in topic extraction: {e}")
         return {"topics": []}
 
 async def analyze_topic_relationships(topics: List[TopicNode]) -> List[Dict[str, Any]]:
-    """Analyze relationships between topics using GPT-4."""
+    """Analyze relationships between topics using Deepseek."""
     topics_context = "\n".join([
         f"Topic: {t.label}\nSummary: {t.summary}\n"
         for t in topics
@@ -118,17 +140,35 @@ async def analyze_topic_relationships(topics: List[TopicNode]) -> List[Dict[str,
     Respond ONLY with the JSON, no other text.
     """
 
-    response = await openai_client.chat.completions.create(
-        model="gpt-4",
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0.7
-    )
-    
     try:
-        return json.loads(response.choices[0].message.content)
-    except json.JSONDecodeError as e:
-        print(f"Error parsing JSON from GPT response: {e}")
-        print(f"Raw response: {response.choices[0].message.content}")
+        response = await deepseek_client.chat.completions.create(
+            model="deepseek-chat",
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant that responds only in valid JSON format."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.3  # Lower temperature for more consistent JSON output
+        )
+        
+        content = response.choices[0].message.content.strip()
+        # Clean up the response to ensure it's valid JSON
+        content = content.replace("```json", "").replace("```", "").strip()
+        
+        # Print raw content for debugging
+        print("Raw response content:", content)
+        
+        try:
+            return json.loads(content)
+        except json.JSONDecodeError as e:
+            print(f"JSON parse error: {e}")
+            # Attempt to fix common JSON issues
+            if not content.startswith("{"):
+                content = content[content.find("{"):]
+            if not content.endswith("}"):
+                content = content[:content.rfind("}") + 1]
+            return json.loads(content)
+    except Exception as e:
+        print(f"Error in relationship analysis: {e}")
         return {"relationships": []}
 
 async def compute_semantic_similarity(topics: List[TopicNode]) -> List[Tuple[str, str, float]]:
@@ -235,7 +275,6 @@ async def process_video_topics(video_id: str) -> TopicGraph:
     
     return TopicGraph(nodes=topics_list, edges=edges)
 
-# Store the processed graph in Supabase
 async def store_topic_graph(video_id: str, graph: TopicGraph):
     """Store the topic graph in Supabase."""
     data = {

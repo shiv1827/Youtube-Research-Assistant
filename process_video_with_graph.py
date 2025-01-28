@@ -13,16 +13,16 @@ async def process_video_with_graph(video_url: str):
     
     # Step 2: Generate topic graph
     print("Step 2: Generating topic graph...")
-    topic_graph=await process_video_topics("NQtWHOUmqNw")
+    topic_graph=await process_video_topics("pjZI2MuLWWw")
     print("✓ Topic graph generated")
-    await store_topic_graph("NQtWHOUmqNw", topic_graph)
+    await store_topic_graph("pjZI2MuLWWw", topic_graph)
     print(f"Completed processing video: {video_url}")
     return video_url
 
 async def main():
     # You can add multiple video URLs here
     video_urls = [
-        "https://www.youtube.com/watch?v=-XbfmhGk4r0"  # Replace with actual video URL
+        "https://www.youtube.com/watch?v=pjZI2MuLWWw&t=1916s"  # Replace with actual video URL
     ]
     
     for url in video_urls:

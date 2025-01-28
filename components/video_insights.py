@@ -4,17 +4,13 @@ import json
 import re
 from content_processor import process_video_chunks
 
-def clean_text(text: str) -> str:
+def clean_text(text):
     """Clean text by removing HTML tags and extra whitespace."""
-    if not text:
-        return ""
-    # Remove HTML tags and common artifacts
-    text = re.sub(r'<[^>]+>|</[^>]+>', '', text)
-    # Fix common HTML entities
-    text = text.replace('&nbsp;', ' ').replace('&amp;', '&')
-    # Remove extra whitespace
-    text = ' '.join(text.split())
-    return text
+    if not text or isinstance(text, list):
+        return text if isinstance(text, list) else ""
+    text = re.sub(r'<[^>]+>|</[^>]+>', '', str(text))
+    text = re.sub(r'\s+', ' ', text)
+    return text.strip()
 
 def create_youtube_embed(video_id: str, timestamp: int = 0):
     """Create YouTube embed HTML with JavaScript for timestamp control."""
