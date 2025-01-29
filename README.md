@@ -1,130 +1,154 @@
-# Pydantic AI: Documentation Crawler and RAG Agent
+# YouTube Research Assistant
 
-An intelligent documentation crawler and RAG (Retrieval-Augmented Generation) agent built using Pydantic AI and Supabase. The agent can crawl documentation websites, store content in a vector database, and provide intelligent answers to user questions by retrieving and analyzing relevant documentation chunks.
+A modern web application that helps users analyze and interact with YouTube video content through an AI-powered chat interface.
 
 ## Features
 
-- Documentation website crawling and chunking
-- Vector database storage with Supabase
-- Semantic search using OpenAI embeddings
-- RAG-based question answering
-- Support for code block preservation
-- Streamlit UI for interactive querying
-- Available as both API endpoint and web interface
+### Core Functionality
+- **Video Analysis**: Analyze YouTube videos by providing video URLs
+- **Interactive Chat**: Natural conversation interface to discuss video content
+- **Real-time Responses**: Streaming responses with typing indicators
+- **Source References**: Timestamps and quotes from the video when providing information
+- **Error Handling**: Graceful error handling for invalid videos or processing issues
 
-## Prerequisites
+### UI/UX Improvements
+1. **Message Formatting**
+   - Enhanced readability with proper paragraph spacing
+   - Timestamp formatting (MM:SS)
+   - Increased max-width for better readability
+   - Improved spacing and borders
 
-- Python 3.11+
-- Supabase account and database
-- OpenAI API key
-- Streamlit (for web interface)
+2. **Visual Design**
+   - Gradient backgrounds for user messages
+   - Backdrop blur in the input area
+   - Loading animations
+   - Modern message bubble styling
+   - Better source formatting with timestamps
 
-## Installation
+3. **Empty State**
+   - Welcome message for new conversations
+   - Helpful instructions for getting started
+   - Improved icons and visual guidance
 
-1. Clone the repository:
-```bash
-git clone https://github.com/coleam00/ottomator-agents.git
-cd ottomator-agents/crawl4AI-agent
-```
+4. **Loading States**
+   - Animated typing indicators
+   - Loading animation in send button
+   - Disabled states for inputs during processing
 
-2. Install dependencies (recommended to use a Python virtual environment):
-```bash
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-pip install -r requirements.txt
-```
+## Recent Updates
 
-3. Set up environment variables:
-   - Rename `.env.example` to `.env`
-   - Edit `.env` with your API keys and preferences:
-   ```env
-   OPENAI_API_KEY=your_openai_api_key
-   SUPABASE_URL=your_supabase_url
-   SUPABASE_SERVICE_KEY=your_supabase_service_key
-   LLM_MODEL=gpt-4o-mini  # or your preferred OpenAI model
-   ```
+### UI Enhancements
+1. **Chat Component Improvements**
+   - Simplified message handling logic
+   - Added deduplication for streamed responses
+   - Enhanced error handling and display
+   - Improved timestamp formatting
 
-## Usage
+2. **Visual Updates**
+   - Removed dependency on custom scrollbar plugin
+   - Streamlined styling approach
+   - Enhanced accessibility
 
-### Database Setup
+### Backend Integration
+1. **Response Handling**
+   - Improved streaming response parsing
+   - Better error message formatting
+   - Enhanced metadata handling for video sources
 
-Execute the SQL commands in `site_pages.sql` to:
-1. Create the necessary tables
-2. Enable vector similarity search
-3. Set up Row Level Security policies
+## Known Issues
 
-In Supabase, do this by going to the "SQL Editor" tab and pasting in the SQL into the editor there. Then click "Run".
+1. **Scrolling Functionality** (To Be Fixed)
+   - Scrolling during message streaming needs improvement
+   - Auto-scroll behavior needs refinement
+   - Native scrollbar styling could be enhanced
 
-### Crawl Documentation
+2. **Response Formatting**
+   - Occasional duplicate responses in specific scenarios
+   - Some formatting inconsistencies in long messages
 
-To crawl and store documentation in the vector database:
+## Technical Stack
 
-```bash
-python crawl_pydantic_ai_docs.py
-```
+### Frontend
+- Next.js 14
+- TypeScript
+- Tailwind CSS
+- React Hooks for state management
 
-This will:
-1. Fetch URLs from the documentation sitemap
-2. Crawl each page and split into chunks
-3. Generate embeddings and store in Supabase
-
-### Streamlit Web Interface
-
-For an interactive web interface to query the documentation:
-
-```bash
-streamlit run streamlit_ui.py
-```
-
-The interface will be available at `http://localhost:8501`
-
-## Configuration
-
-### Database Schema
-
-The Supabase database uses the following schema:
-```sql
-CREATE TABLE site_pages (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    url TEXT,
-    chunk_number INTEGER,
-    title TEXT,
-    summary TEXT,
-    content TEXT,
-    metadata JSONB,
-    embedding VECTOR(1536)
-);
-```
-
-### Chunking Configuration
-
-You can configure chunking parameters in `crawl_pydantic_ai_docs.py`:
-```python
-chunk_size = 5000  # Characters per chunk
-```
-
-The chunker intelligently preserves:
-- Code blocks
-- Paragraph boundaries
-- Sentence boundaries
+### Backend
+- Python
+- FastAPI
+- YouTube Transcript API
+- AI/ML integration for content analysis
 
 ## Project Structure
 
-- `crawl_pydantic_ai_docs.py`: Documentation crawler and processor
-- `pydantic_ai_expert.py`: RAG agent implementation
-- `streamlit_ui.py`: Web interface
-- `site_pages.sql`: Database setup commands
-- `requirements.txt`: Project dependencies
+```
+├── frontend/
+│   ├── components/
+│   │   ├── chat.tsx         # Main chat interface
+│   │   └── ui/             # Reusable UI components
+│   ├── app/
+│   │   └── page.tsx        # Main application page
+│   └── lib/
+│       └── api.ts          # API integration
+└── backend/
+    └── youtube_research_assistant.py  # Backend logic
+```
 
-## Live Agent Studio Version
+## Future Improvements
 
-If you're interested in seeing how this agent is implemented in the Live Agent Studio, check out the `studio-integration-api` directory. This contains the API endpoint for the production version of the agent that runs on the platform.
+1. **High Priority**
+   - Fix scrolling behavior in chat interface
+   - Enhance response deduplication
+   - Improve error handling for video processing
 
-## Error Handling
+2. **Features to Add**
+   - Support for multiple video analysis
+   - Enhanced source citation
+   - User preferences/settings
+   - History of analyzed videos
 
-The system includes robust error handling for:
-- Network failures during crawling
-- API rate limits
-- Database connection issues
-- Embedding generation errors
-- Invalid URLs or content
+## Development Notes
+
+### Current Focus
+- Stabilizing the chat interface
+- Improving response quality
+- Enhancing user experience
+
+### Recent Fixes
+- Removed problematic scrollbar plugin
+- Simplified message handling logic
+- Enhanced streaming response handling
+
+## Getting Started
+
+1. Clone the repository
+2. Install dependencies:
+   ```bash
+   # Frontend
+   cd frontend
+   npm install
+
+   # Backend
+   cd backend
+   pip install -r requirements.txt
+   ```
+3. Start the development servers:
+   ```bash
+   # Frontend
+   npm run dev
+
+   # Backend
+   uvicorn main:app --reload
+   ```
+
+## Contributing
+
+Feel free to submit issues and enhancement requests. Follow these steps:
+1. Fork the repository
+2. Create a feature branch
+3. Submit a pull request
+
+## License
+
+[Add appropriate license information]
