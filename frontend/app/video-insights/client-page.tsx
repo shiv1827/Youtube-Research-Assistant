@@ -1,8 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { VideoPlayer } from '@/components/video-player'
 import { VideoInsights } from '@/components/video-insights'
+import ReactPlayer from 'react-player'
 
 // YouTube URL patterns we want to support
 const YOUTUBE_URL_PATTERNS = [
@@ -18,6 +19,7 @@ export function VideoInsightsClient() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [debugMessage, setDebugMessage] = useState<string | null>(null)
+  const playerRef = useRef<ReactPlayer>(null)
 
   const handleTimeUpdate = (time: number) => {
     setCurrentTime(time)
@@ -136,6 +138,7 @@ export function VideoInsightsClient() {
             <VideoPlayer
               url={videoUrl}
               onTimeUpdate={handleTimeUpdate}
+              ref={playerRef}
             />
           </div>
           <div className="flex flex-col space-y-4 overflow-hidden">
@@ -143,7 +146,9 @@ export function VideoInsightsClient() {
               videoId={videoId}
               currentTime={currentTime}
               onTimeSelect={(time) => {
-                // TODO: Implement seek functionality
+                if (playerRef.current) {
+                  playerRef.current.seekTo(time, 'seconds')
+                }
               }}
             />
           </div>

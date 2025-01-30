@@ -94,6 +94,48 @@ async def get_video_chunks(video_id: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/videos")
+async def get_videos():
+    """Get all available videos with topic graphs."""
+    try:
+        # First get all videos that have topic graphs
+        result = supabase.table("topic_graphs").select("*").execute()
+        if not result.data:
+            return {"videos": []}
+        
+        # Then get their metadata for titles
+        video_ids = [item["video_id"] for item in result.data]
+        metadata_result = supabase.table("video_metadata").select("*").in_("video_id", video_ids).execute()
+        
+        # Create a mapping of video_id to metadata
+        metadata_map = {
+            item["video_id"]: item["metadata"].get("title", item["video_id"]) 
+            for item in metadata_result.data
+        } if metadata_result.data else {}
+        
+        # Format videos with id and title
+        formatted_videos = [
+            {
+                "id": item["video_id"],
+                "title": metadata_map.get(item["video_id"], item["video_id"])
+            }
+            for item in result.data
+        ]
+        return {"videos": formatted_videos}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/topic-graph/{video_id}")
+async def get_topic_graph(video_id: str):
+    """Get topic graph data for a specific video."""
+    try:
+        result = supabase.table("topic_graphs").select("*").eq("video_id", video_id).single().execute()
+        if not result.data:
+            raise HTTPException(status_code=404, detail="Topic graph not found")
+        return result.data
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000) 
