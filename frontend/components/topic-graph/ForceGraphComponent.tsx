@@ -36,9 +36,8 @@ export function ForceGraphComponent({
   onNodeHover
 }: ForceGraphComponentProps) {
   const fgRef = useRef<any>();
-  const [hoveredNode, setHoveredNode] = useState<any>(null);
+  const hoveredNodeRef = useRef<any>(null);
   const hoverTimeoutRef = useRef<any>(null);
-  const lastHoverTimeRef = useRef<number>(0);
 
   useEffect(() => {
     if (fgRef.current) {
@@ -54,28 +53,25 @@ export function ForceGraphComponent({
       clearTimeout(hoverTimeoutRef.current);
     }
 
-    const now = Date.now();
-    const timeSinceLastHover = now - lastHoverTimeRef.current;
-
     if (node) {
-      // Only update if it's a different node or enough time has passed
-      if (node !== hoveredNode || timeSinceLastHover > 500) {
-        setHoveredNode(node);
-        onNodeHover?.(node);
-        lastHoverTimeRef.current = now;
+      hoveredNodeRef.current = node;
+      onNodeHover?.(node);
+      if (fgRef.current) {
+        fgRef.current.pauseAnimation();
       }
       return;
     }
 
-    // Only unhover if mouse is actually away from the node for a while
-    if (!node && hoveredNode) {
-      // Much longer delay before unhovering
+    if (!node && hoveredNodeRef.current) {
       hoverTimeoutRef.current = setTimeout(() => {
-        setHoveredNode(null);
+        hoveredNodeRef.current = null;
         onNodeHover?.(null);
-      }, 2000); // Increased to 2 seconds for better readability
+        if (fgRef.current) {
+          fgRef.current.resumeAnimation();
+        }
+      }, 2000);
     }
-  }, [onNodeHover, hoveredNode]);
+  }, [onNodeHover]);
 
   if (!nodes?.length || !edges?.length) {
     return null;
@@ -118,7 +114,7 @@ export function ForceGraphComponent({
         const textWidth = ctx.measureText(label).width;
         const bckgDimensions = [textWidth, fontSize].map(n => n + fontSize * 0.8);
 
-        const isHovered = node === hoveredNode;
+        const isHovered = node === hoveredNodeRef.current;
         const nodeSize = (node.size || 5) + (isHovered ? 2 : 0);
         const glowSize = nodeSize + 8;
 
